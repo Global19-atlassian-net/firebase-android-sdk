@@ -32,6 +32,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
+import org.gradle.api.attributes.Attribute
 import org.gradle.api.logging.Logger
 
 class VendorPlugin : Plugin<Project> {
@@ -60,35 +61,34 @@ class VendorPlugin : Plugin<Project> {
         android.registerTransform(VendorTransform(
                 vendor,
                 JarJarTransformer(
-                        parentPackageProvider = { variantName ->
-                            val packageName = android.libraryVariants.find {
-                                it.name == "release"
-                            }!!.applicationId
-                            if (variantName.endsWith("AndroidTest"))
-                                "$packageName.$variantName"
-                            else packageName
+                        parentPackageProvider = {
+                            android.libraryVariants.find { it.name == "release" }!!.applicationId
                         },
                         jarJarProvider = { jarJar.resolve() },
                         project = project,
                         logger = project.logger),
-                logger = project.logger))
+                logger = project.logger,
+                android = android))
     }
 }
 
 interface JarTransformer {
-    fun transform(variantName: String, input: File, output: File, ownPackageNames: Set<String>, externalPackageNames: Set<String>)
+    fun transform(variantName: String, input: File, output: File, ownPackageNames: Set<String>, externalPackageNames: Set<String>, classesToExclude: Set<String>)
 }
 
 class JarJarTransformer(
-    private val parentPackageProvider: (String) -> String,
+    private val parentPackageProvider: () -> String,
     private val jarJarProvider: () -> Collection<File>,
     private val project: Project,
     private val logger: Logger
 ) : JarTransformer {
-    override fun transform(variantName: String, input: File, output: File, ownPackageNames: Set<String>, externalPackageNames: Set<String>) {
-        val parentPackage = parentPackageProvider(variantName)
+    override fun transform(variantName: String, input: File, output: File, ownPackageNames: Set<String>, externalPackageNames: Set<String>, classesToExclude: Set<String>) {
+        val parentPackage = parentPackageProvider()
         val rulesFile = File.createTempFile("$parentPackage-$variantName", ".jarjar")
         rulesFile.printWriter().use {
+            for (classToExclude in classesToExclude) {
+                it.println("zap $classToExclude")
+            }
             for (packageName in ownPackageNames) {
                 it.println("keep $packageName.**")
             }
@@ -111,7 +111,8 @@ class JarJarTransformer(
 class VendorTransform(
     private val configuration: Configuration,
     private val jarTransformer: JarTransformer,
-    private val logger: Logger
+    private val logger: Logger,
+    private val android: LibraryExtension
 ) :
         Transform() {
     override fun getName() = "firebaseVendorTransform"
@@ -190,12 +191,45 @@ class VendorTransform(
         val jar = File(workDir, "intermediate.jar")
         zipAll(unzippedDir, jar)
         val jar2 = File(workDir, "output.jar")
-        jarTransformer.transform(transformInvocation.context.variantName, jar, jar2, ownPackageNames, externalPackageNames)
+        val classesToExclude = classesToExclude(transformInvocation.context.variantName)
+        println(classesToExclude.joinToString("\n"))
+
+        jarTransformer.transform(transformInvocation.context.variantName, jar, jar2, ownPackageNames, externalPackageNames, classesToExclude)
         return jar2
     }
 
     private fun inferPackages(dir: File): Set<String> {
         return dir.walk().filter { it.name.endsWith(".class") }.map { it.parentFile.toRelativeString(dir).replace('/', '.') }.toSet()
+    }
+
+    private fun classesToExclude(variantName: String): Set<String> {
+        val testedVariant = android.testVariants.find { it.name == variantName }
+        if (testedVariant == null) {
+            return setOf()
+        }
+        val dependencyJars = testedVariant.runtimeConfiguration.incoming.artifactView {
+            attributes {
+                attribute(Attribute.of("artifactType", String::class.java), "jar")
+            }
+        }.artifacts.artifactFiles
+        return dependencyJars.asSequence().map {
+            println("Checking $it")
+            if (!it.path.contains("intermediates/full_jar")) {
+                println("Skipping $it")
+                return@map it
+            }
+            println("Replacing $it")
+            return@map File(it.path.replace(Regex("(.+)/intermediates/full_jar/(.+)/full.jar$")) { match ->
+                "${match.groups[1]?.value}/intermediates/runtime_library_classes_jar/${match.groups[2]?.value}/classes.jar"
+            })
+        }.flatMap {
+            val entries = ZipFile(it).entries()
+            entries.asIterator().asSequence()
+        }.filter {
+            !it.isDirectory && it.name.endsWith(".class")
+        }.map {
+            it.name.replace('/', '.').removeSuffix(".class")
+        }.toSet()
     }
 }
 
