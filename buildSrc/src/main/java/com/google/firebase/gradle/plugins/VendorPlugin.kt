@@ -127,8 +127,12 @@ class VendorTransform(
         return mutableSetOf(QualifiedContent.Scope.PROJECT)
     }
 
+    override fun getReferencedScopes(): MutableSet<in QualifiedContent.Scope> {
+        return mutableSetOf(QualifiedContent.Scope.PROJECT)
+    }
+
     override fun transform(transformInvocation: TransformInvocation) {
-        transformInvocation.javaClass.typeParameters
+        println(transformInvocation.referencedInputs)
         if (configuration.resolve().isEmpty()) {
             logger.info("Nothing to vendor. " +
                     "If you don't need vendor functionality please disable 'firebase-vendor' plugin. " +
