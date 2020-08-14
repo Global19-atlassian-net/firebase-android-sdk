@@ -18,7 +18,6 @@ import static com.google.firebase.gradle.plugins.ClosureUtil.closureOf;
 
 import com.android.build.gradle.LibraryExtension;
 import com.android.build.gradle.api.AndroidSourceSet;
-import com.android.build.gradle.internal.dsl.TestOptions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.firebase.gradle.plugins.apiinfo.ApiInformationTask;
@@ -59,7 +58,7 @@ public class FirebaseLibraryPlugin implements Plugin<Project> {
 
     // see https://github.com/robolectric/robolectric/issues/5456
     android.testOptions(
-        (TestOptions options) ->
+        options ->
             options
                 .getUnitTests()
                 .all(

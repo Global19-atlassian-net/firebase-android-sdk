@@ -139,9 +139,9 @@ class VendorPluginTests {
                 google()
                 jcenter()
             }
-            
+
             android.compileSdkVersion = 26
-            
+
             dependencies {
                 $deps
             }

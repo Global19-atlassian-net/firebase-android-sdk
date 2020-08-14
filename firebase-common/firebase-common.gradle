@@ -33,7 +33,6 @@ android {
       versionName version
       multiDexEnabled true
       testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-      testInstrumentationRunnerArguments 'hello': 'world', 'foo': 'bar'
     }
     sourceSets {
         androidTest {
