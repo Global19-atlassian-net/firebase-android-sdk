@@ -75,11 +75,11 @@ class VendorPluginTests {
                 "com/example/com/google/errorprone/annotations/CanIgnoreReturnValue.class")
 
         // ImmutableList is not used, so it should be stripped out.
-        assertThat(classes).doesNotContain("com/google/common/collect/ImmutableList")
+        assertThat(classes).doesNotContain("com/google/common/collect/ImmutableList.class")
     }
 
     @Test
-    fun `vendor dagger excluding javax transitive deps and not using it should not include dagger`() {
+    fun `vendor dagger excluding javax transitive deps and not using it should include dagger`() {
         val classes = buildWith("""
             vendor ('com.google.dagger:dagger:2.27') {
               exclude group: "javax.inject", module: "javax.inject"
@@ -93,13 +93,14 @@ class VendorPluginTests {
                     }
                     """.trimIndent()))
         // expected classes
-        assertThat(classes).containsExactly(
+        assertThat(classes).containsAtLeast(
                 "com/example/Hello.class",
-                "com/example/BuildConfig.class")
+                "com/example/BuildConfig.class",
+                "com/example/dagger/Lazy.class")
     }
 
     @Test
-    fun `vendor dagger excluding javax transitive deps should only include used symbols`() {
+    fun `vendor dagger excluding javax transitive deps should include dagger`() {
         val classes = buildWith("""
             vendor ('com.google.dagger:dagger:2.27') {
               exclude group: "javax.inject", module: "javax.inject"
@@ -116,7 +117,7 @@ class VendorPluginTests {
                     }
                     """.trimIndent()))
         // expected classes
-        assertThat(classes).containsExactly(
+        assertThat(classes).containsAtLeast(
                 "com/example/Hello.class",
                 "com/example/BuildConfig.class",
                 "com/example/dagger/Module.class")
